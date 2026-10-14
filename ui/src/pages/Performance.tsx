@@ -12,7 +12,7 @@ const MODE_TEXT: Record<PerfMode, string> = {
   Performance: 'Highest power limits, for games.',
 }
 
-const MIN = 2000, MAX = 5500, STEP = 100
+const STEP = 100
 const SIZE = 560, C = SIZE / 2, R = 170, SWEEP = 270, START = 135
 const polar = (t: number, r = R) => {
   const a = ((START + SWEEP * t) * Math.PI) / 180
@@ -26,14 +26,16 @@ const MODE_ANGLE: Record<PerfMode, number> = { Quiet: 215, Cool: 250, Balanced: 
 const PX_PER_RPM = 1 / 12 // vertical drag: 12 rpm per pixel
 
 type FanMode = 'Auto' | 'Manual' | 'Max'
-const toFrac = (rpm: number) => Math.min(1, Math.max(0, (rpm - MIN) / (MAX - MIN)))
-const snap = (rpm: number) => Math.min(MAX, Math.max(MIN, Math.round(rpm / STEP) * STEP))
 
 export function Performance() {
   const hw = useStore(s => s.hw)
   const t = useStore(s => s.t)
   const busy = useStore(s => s.busy.fan)
   const mode: FanMode = hw?.maxFan ? 'Max' : hw?.manualRpm != null ? 'Manual' : 'Auto'
+  // Range is this laptop's, from its BIOS fan table; the fallback only covers the frame before state loads.
+  const MIN = hw?.fanMin ?? 2000, MAX = hw?.fanMax ?? 5500
+  const toFrac = (rpm: number) => Math.min(1, Math.max(0, (rpm - MIN) / (MAX - MIN)))
+  const snap = (rpm: number) => Math.min(MAX, Math.max(MIN, Math.round(rpm / STEP) * STEP))
   const [draft, setDraft] = useState(hw?.manualRpm ?? 3500)
   const [dragging, setDragging] = useState(false)
   const [nudging, setNudging] = useState(false) // wheel / arrow keys: show the value now, write once input stops
@@ -48,11 +50,12 @@ export function Performance() {
   const active = mode !== 'Auto' || adjusting
 
   // Arc follows the target with a zero-bounce spring, except while the pointer drives it directly.
+  const targetFrac = toFrac(target), draftFrac = toFrac(draft)
   useEffect(() => {
-    if (dragging) { frac.set(toFrac(draft)); return }
-    const ctl = animate(frac, toFrac(target), dragSpring)
+    if (dragging) { frac.set(draftFrac); return }
+    const ctl = animate(frac, targetFrac, dragSpring)
     return () => ctl.stop()
-  }, [target, dragging, draft, frac])
+  }, [targetFrac, dragging, draftFrac, frac])
 
   const thumbX = useTransform(frac, f => polar(f)[0])
   const thumbY = useTransform(frac, f => polar(f)[1])

@@ -81,6 +81,49 @@ public static class Bios
     public static void SetFanLevel(int cpuRpm, int gpuRpm) =>
         Call(Gaming, 0x2E, [(byte)Math.Clamp(cpuRpm / 100, 0, 255), (byte)Math.Clamp(gpuRpm / 100, 0, 255), 0, 0]);
 
+    /// Manual-fan range and CPU→GPU pairing for this laptop, from the BIOS fan table (0x2F) like OMEN Gaming Hub.
+    /// Table rows are [level per fan…, noise dB] in rising order (8A44: 2,15, 0,0,16, 21,0,18, 24,22,22 … 58,60,50).
+    public sealed record FanCurve(int MinRpm, int MaxRpm, byte[][] Rows)
+    {
+        /// GPU speed for a CPU speed: keeps the CPU/GPU offset of the table row it falls in.
+        public int GpuRpmFor(int cpuRpm)
+        {
+            var row = Rows.LastOrDefault(r => cpuRpm / 100 >= r[0]);
+            return row is { Length: >= 3 } ? cpuRpm + (row[1] - row[0]) * 100 : cpuRpm;
+        }
+    }
+    static readonly Lazy<FanCurve> _curve = new(ReadFanCurve);
+    public static FanCurve Curve => _curve.Value;
+
+    static FanCurve ReadFanCurve()
+    {
+        try
+        {
+            var raw = Call(Gaming, 0x2F);
+            int width = raw[0] + 1;
+            var rows = new List<byte[]>();
+            for (int i = 2; raw[0] > 0 && i + width <= raw.Length; i += width)
+            {
+                var row = raw[i..(i + width)];
+                if (row.All(b => b == 0)) break;
+                rows.Add(row);
+            }
+            // Lowest row where every fan spins: below it the BIOS parks a fan at 0 RPM.
+            var min = rows.FirstOrDefault(r => r[..^1].All(l => l > 0));
+            if (min != null) return new(min[0] * 100, rows[^1][0] * 100, [.. rows]);
+        }
+        catch (BiosException) { }
+        return new(2000, 5500, []); // table unreadable: the range verified on OMEN 16 (8A44) before tables were read
+    }
+
+    /// Holds both fans at a manual speed, clamped to this laptop's range. Returns the CPU RPM applied.
+    public static int SetManualFan(int cpuRpm)
+    {
+        int rpm = Math.Clamp(cpuRpm, Curve.MinRpm, Curve.MaxRpm);
+        SetFanLevel(rpm, Curve.GpuRpmFor(rpm));
+        return rpm;
+    }
+
     // ---- Temperature ----
     public static int CpuTemp => Call(Gaming, 0x23, [0x01, 0, 0, 0])[0];
 

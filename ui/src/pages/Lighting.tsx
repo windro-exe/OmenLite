@@ -1,6 +1,6 @@
 import { motion, useSpring } from 'motion/react'
 import { HexColorPicker } from 'react-colorful'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { PHYSICAL_ORDER, ZONE_NAMES, setBacklight, setZones } from '../lib/actions'
 import { FALLBACK, layoutFor, zoneLabelX } from '../lib/keyboards'
 import { useStore } from '../lib/store'
@@ -20,7 +20,7 @@ export function Lighting() {
   // Drawing comes from the keyboard type the BIOS reports, so another OMEN shows its own keyboard.
   const layout = layoutFor(hw?.keyboardType) ?? FALLBACK
   const { keys: KEYS, width: UW, height: UH } = layout
-  const zoneX = useMemo(() => zoneLabelX(layout, PHYSICAL_ORDER), [layout])
+  const zoneX = zoneLabelX(layout, PHYSICAL_ORDER)
   const on = hw?.backlight ?? true
 
   // One BIOS write when the stroke ends, anywhere in the window.
@@ -50,6 +50,15 @@ export function Lighting() {
     const base = Math.random() * 360
     void setZones([0, 1, 2, 3].map(i => hsl((base + i * 40) % 360)), 'Shuffled')
   }
+
+  if (hw && !hw.fourZone) return (
+    <div className="grid size-full place-items-center text-center">
+      <div>
+        <h1 className="text-[22px] font-normal tracking-[-0.02em]">Keyboard</h1>
+        <p className="mt-2 text-t3">This laptop's keyboard has no colour zones the BIOS lets apps control.</p>
+      </div>
+    </div>
+  )
 
   return (
     <div className="relative size-full">

@@ -51,7 +51,7 @@ public sealed class WebWindow : Window
 
         _tray = BuildTray();
         _telemetry.Tick += async (_, _) => await PushTelemetry();
-        _fanRefresh.Tick += (_, _) => { if (_manualRpm is { } r) Try(() => Bios.SetFanLevel(r, r)); }; // BIOS drops manual level after ~2 min
+        _fanRefresh.Tick += (_, _) => { if (_manualRpm is { } r) Try(() => Bios.SetManualFan(r)); }; // BIOS drops manual level after ~2 min
         SourceInitialized += (_, _) =>
         {
             var hwnd = new WindowInteropHelper(this).Handle;
@@ -162,7 +162,7 @@ public sealed class WebWindow : Window
                 Bios.SetPerfMode(m);
                 _perf = m;
                 Registry.CurrentUser.CreateSubKey(RegPath).SetValue("PerfMode", m.ToString());
-                if (_manualRpm is { } r) Bios.SetFanLevel(r, r); // applying a thermal mode resets fans to auto
+                if (_manualRpm is { } r) Bios.SetManualFan(r); // applying a thermal mode resets fans to auto
                 return null;
             }
             case "setMaxFan":
@@ -180,10 +180,8 @@ public sealed class WebWindow : Window
                 }
                 else
                 {
-                    int rpm = Math.Clamp(arg.GetInt32(), 2000, 5500);
                     if (Bios.MaxFan) Bios.MaxFan = false;
-                    Bios.SetFanLevel(rpm, rpm);
-                    _manualRpm = rpm;
+                    _manualRpm = Bios.SetManualFan(arg.GetInt32());
                     Dispatcher.Invoke(_fanRefresh.Start);
                 }
                 return null;
@@ -243,9 +241,12 @@ public sealed class WebWindow : Window
             perf = Booster.GameBoostActive ? Bios.PerfMode.Performance : _perf,
             maxFan = Read(() => Bios.MaxFan),
             manualRpm = _manualRpm,
+            fanMin = Bios.Curve.MinRpm,
+            fanMax = Bios.Curve.MaxRpm,
+            fourZone = Bios.HasFourZone, // laptops without RGB zones hide the Keyboard page
             zones = zones.Select(z => $"#{z.R:X2}{z.G:X2}{z.B:X2}").ToArray(),
             backlight = Read(() => Bios.Backlight),
-            gpuMode = Read(Bios.GetGpuMode),
+            gpuMode = Read<Bios.GpuMode?>(() => Bios.GetGpuMode()), // null on laptops without a graphics switch
             keyboardType = Read<int?>(() => Bios.KeyboardType), // null when the BIOS call fails
             boost = Booster.GameBoostActive,
             autostart = Schtasks($"/Query /TN {TaskName}") == 0,

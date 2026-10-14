@@ -78,6 +78,7 @@ public partial class App : Application
         sb.AppendLine(Try("FanCount", () => Bios.FanCount));
         sb.AppendLine(Try("FanRpm", () => Bios.FanRpm()));
         sb.AppendLine(Try("MaxFan", () => Bios.MaxFan));
+        sb.AppendLine(Try("FanCurve", () => $"{Bios.Curve.MinRpm}-{Bios.Curve.MaxRpm} rpm, gpu at min {Bios.Curve.GpuRpmFor(Bios.Curve.MinRpm)}, at max {Bios.Curve.GpuRpmFor(Bios.Curve.MaxRpm)}"));
         sb.AppendLine(Try("CpuTemp", () => Bios.CpuTemp));
         sb.AppendLine(Try("HasFourZone", () => Bios.HasFourZone));
         sb.AppendLine(Try("Zones", () => Bios.GetZones().Select(z => $"#{z.R:X2}{z.G:X2}{z.B:X2}").ToArray()));

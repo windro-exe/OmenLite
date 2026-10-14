@@ -30,11 +30,13 @@ export function SettingsPage() {
         <h1 className="text-[22px] font-normal tracking-[-0.02em]">Settings</h1>
       </div>
       <div className="mx-auto w-[680px] divide-y divide-hairline pt-[120px]">
-        <Row title="Graphics mode" text={GPU_TEXT[hw.gpuMode]} note={changed ? 'Restart to apply' : undefined}>
-          <div ref={gpuRow}>
-            <Segmented<GpuMode> label="Graphics mode" options={GPU_MODES} value={hw.gpuMode} onChange={m => { if (m !== hw.gpuMode) setPending(m) }} />
-          </div>
-        </Row>
+        {hw.gpuMode && (
+          <Row title="Graphics mode" text={GPU_TEXT[hw.gpuMode]} note={changed ? 'Restart to apply' : undefined}>
+            <div ref={gpuRow}>
+              <Segmented<GpuMode> label="Graphics mode" options={GPU_MODES} value={hw.gpuMode} onChange={m => { if (m !== hw.gpuMode) setPending(m) }} />
+            </div>
+          </Row>
+        )}
         <Row title="Start with Windows" text="Opens quietly in the tray when you sign in.">
           <Switch label="Start with Windows" checked={hw.autostart} busy={busyAuto} onChange={v => void setAutostart(v)} />
         </Row>

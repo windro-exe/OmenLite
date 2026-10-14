@@ -39,6 +39,7 @@ public partial class MainWindow : Window
     {
         InitializeComponent();
         _tray = BuildTray();
+        (FanSlider.Minimum, FanSlider.Maximum) = (Bios.Curve.MinRpm, Bios.Curve.MaxRpm); // per-laptop, from the BIOS fan table
         GpuCombo.ItemsSource = Enum.GetValues<Bios.GpuMode>();
         // BIOS drops manual fan level after ~2 min; re-send while manual mode is on.
         _fanRefresh.Tick += (_, _) => ApplyFanLevel();
@@ -236,7 +237,7 @@ public partial class MainWindow : Window
     /// Level 0 means 0 RPM, not auto. Re-applying the thermal mode hands fans back to BIOS control (verified on F.27).
     void RestoreAutoFan() => Run(() => Bios.SetPerfMode(_perf), "Fans back to automatic");
 
-    bool ApplyFanLevel() => Run(() => Bios.SetFanLevel((int)FanSlider.Value, (int)FanSlider.Value), null);
+    bool ApplyFanLevel() => Run(() => Bios.SetManualFan((int)FanSlider.Value), null);
 
     void FanSlider_Changed(object s, RoutedPropertyChangedEventArgs<double> e)
     {

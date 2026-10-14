@@ -16,9 +16,15 @@ export interface HwState {
   /** Hex colours in BIOS index order: 0 Right, 1 Middle, 2 Left, 3 WASD */
   zones: string[]
   backlight: boolean
-  gpuMode: GpuMode
+  /** null when the laptop has no graphics switch (MUX). */
+  gpuMode: GpuMode | null
+  /** false when the laptop has no 4-zone RGB keyboard. */
+  fourZone: boolean
   /** BIOS keyboard type (HP WMI 0x20008/0x2B): 1 with number pad, 2 without; null when the BIOS doesn't say. */
   keyboardType: number | null
+  /** Manual fan range for this laptop in rpm, read from the BIOS fan table. */
+  fanMin: number
+  fanMax: number
   boost: boolean
   autostart: boolean
 }
@@ -114,9 +120,12 @@ const mock: HwState = {
   perf: 'Balanced',
   maxFan: false,
   manualRpm: null,
+  fanMin: 2400,
+  fanMax: 5800,
   zones: ['#BF1E1E', '#BF1E1E', '#BF1E1E', '#BF1E1E'],
   backlight: true,
   gpuMode: 'Discrete',
+  fourZone: true,
   keyboardType: 2,
   boost: false,
   autostart: false,
@@ -162,7 +171,7 @@ function startMockTelemetry() {
     load = clamp(load + (Math.random() - 0.5) * 14 + (mock.boost ? 3 : 0), 3, 96)
     cpu = clamp(cpu + (44 + load * 0.42 + heat - cpu) * 0.25 + (Math.random() - 0.5) * 2, 35, 98)
     gpu = clamp(gpu + (52 + load * 0.25 + heat * 0.6 - gpu) * 0.2 + (Math.random() - 0.5), 35, 92)
-    const target = mock.maxFan ? 5800 : mock.manualRpm ?? 1800 + (cpu - 40) * 70
+    const target = mock.maxFan ? mock.fanMax : mock.manualRpm ?? 1800 + (cpu - 40) * 70
     f1 += (target - f1) * 0.3
     f2 += (target - 200 - f2) * 0.3
     const t: Telemetry = {
