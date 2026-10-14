@@ -1,0 +1,110 @@
+@import "tailwindcss";
+@import "@fontsource-variable/geist";
+@import "@fontsource-variable/geist-mono";
+
+/* OmenLite tokens — see /DESIGN.md. No other colours, fonts, radii or curves may be used. */
+@theme {
+  --color-*: initial; /* no default palette: nothing can bypass the system */
+  --color-canvas: oklch(0.13 0.004 260);
+  --color-stage: oklch(0.155 0.005 260);
+  --color-raise-1: oklch(0.19 0.007 260);
+  --color-raise-2: oklch(0.23 0.009 260);
+  --color-hairline: oklch(1 0 0 / 0.06);
+  --color-specular: oklch(1 0 0 / 0.09);
+  --color-red: oklch(0.63 0.24 27);
+  --color-amber: oklch(0.8 0.15 72);
+  --color-t1: oklch(1 0 0 / 0.94);
+  --color-t2: oklch(1 0 0 / 0.64);
+  --color-t3: oklch(1 0 0 / 0.42);
+  --color-t4: oklch(1 0 0 / 0.24);
+  --color-white: oklch(1 0 0);
+  --color-black: oklch(0 0 0);
+  --color-transparent: transparent;
+
+  --font-sans: "Geist Variable", system-ui, sans-serif;
+  --font-mono: "Geist Mono Variable", ui-monospace, monospace;
+
+  --radius-dock: 22px;
+  --radius-dock-item: 16px;   /* 22 − 6 padding */
+  --radius-group: 12px;
+  --radius-pill: 8px;         /* 12 − 4 padding */
+  --radius-key: 6px;
+  --radius-tag: 4px;
+
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-house: cubic-bezier(0.2, 0.715, 0.205, 0.99);
+  --ease-morph: cubic-bezier(0.77, 0, 0.175, 1);
+}
+
+/* Base and component rules live in layers so Tailwind utilities override them (unlayered CSS would win). */
+@layer base {
+:root { color-scheme: dark; }
+html, body, #root { height: 100%; }
+html, body {
+  overflow: hidden;
+  overscroll-behavior: none;
+  margin: 0;
+  background: var(--color-canvas);
+  color: var(--color-t1);
+  font-family: var(--font-sans);
+  font-size: 13px;
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+  user-select: none;
+  cursor: default;
+}
+* { scrollbar-width: none; }
+*::-webkit-scrollbar { display: none; }
+button { cursor: default; font: inherit; color: inherit; background: none; border: 0; padding: 0; }
+button:disabled { opacity: 0.4; }
+:focus { outline: none; }
+}
+/* 1.5px red ring, keyboard only; box-shadow follows the element's radius */
+:focus-visible { box-shadow: 0 0 0 2px var(--color-canvas), 0 0 0 3.5px var(--color-red); }
+/* Text fields whose container already shows focus (e.g. the command palette) */
+.no-ring:focus-visible { box-shadow: none; }
+
+@layer components {
+.tabular { font-variant-numeric: tabular-nums; }
+.mono-label { font-family: var(--font-mono); font-size: 11px; font-weight: 500; letter-spacing: 0.06em; color: var(--color-t3); }
+
+/* Raised control: lightness step + specular top edge + hairline perimeter (no drop shadow) */
+.raised {
+  background: var(--color-raise-1);
+  box-shadow: inset 0 1px 0 var(--color-specular), inset 0 0 0 1px var(--color-hairline);
+}
+/* The only glass on screen (DESIGN.md §6) */
+.glass {
+  background: rgb(22 23 28 / 0.72);
+  backdrop-filter: blur(18px) saturate(140%);
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.14), inset 0 0 0 1px var(--color-hairline), 0 18px 40px -12px rgb(0 0 0 / 0.7);
+}
+/* Dither for large radial light: kills 8-bit banding */
+.dither::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none; opacity: 0.08; mix-blend-mode: soft-light;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='64' height='64'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.1' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+}
+
+/* Unlayered on purpose: interaction states must beat colour/background utilities. */
+
+/* Pressables: 0.97 on press; hover only for fine pointers */
+.press { transition: transform 140ms var(--ease-out), background-color 180ms var(--ease-out), color 180ms var(--ease-out); }
+.press:active:not(:disabled) { transform: scale(0.97); }
+@media (hover: hover) and (pointer: fine) {
+  .hover-raise:hover:not(:disabled) { background: var(--color-raise-2); }
+  .hover-text:hover:not(:disabled) { color: var(--color-t1); }
+}
+
+/* react-colorful restyled to the system */
+.picker .react-colorful { width: 100%; height: 168px; gap: 12px; }
+.picker .react-colorful__saturation { border-radius: 10px; border-bottom: none; box-shadow: inset 0 0 0 1px var(--color-hairline); }
+.picker .react-colorful__hue { height: 10px; border-radius: 999px; }
+.picker .react-colorful__pointer { width: 18px; height: 18px; border-width: 2px; cursor: grab; }
+
+@media (prefers-reduced-motion: reduce) {
+  /* Near-zero, not 120ms: forcing a duration onto every element also transitions JS-driven per-frame
+     attributes (the dial ball's cx/cy), which then cut straight across the dial. Motion keeps its opacity fades. */
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+  svg, svg * { transition: none !important; } /* the dial's arc and ball are redrawn every frame by JS */
+}

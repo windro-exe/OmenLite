@@ -1,0 +1,9 @@
+bin/
+obj/
+out/
+dist/
+wwwroot/
+*.user
+probe.txt
+selftest.txt
+.hallmark/
