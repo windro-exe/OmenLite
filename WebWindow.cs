@@ -272,6 +272,7 @@ public sealed class WebWindow : Window
             zones = zones.Select(z => $"#{z.R:X2}{z.G:X2}{z.B:X2}").ToArray(),
             backlight = Read(() => Bios.Backlight),
             gpuMode = Read<Bios.GpuMode?>(() => Bios.GetGpuMode()), // null on laptops without a graphics switch
+            gpuModes = Bios.SupportedGpuModes(),
             keyboardType = Read<int?>(() => Bios.KeyboardType), // null when the BIOS call fails
             boost = Booster.GameBoostActive,
             autostart = Schtasks($"/Query /TN {TaskName}") == 0,

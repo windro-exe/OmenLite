@@ -26,8 +26,9 @@ public static class HubSync
         {
             foreach (var name in new[] { "ProfileJsonWrapperLock_", "ProfilesMutex_" })
             {
-                // Only join HP's lock, never create it: made by us (elevated) it would deny HP's non-elevated app.
-                if (!Mutex.TryOpenExisting(@"Global\" + name + Sid, out var m)) return;
+                // Join HP's lock if an HP process holds it. Never create it: made by us (elevated) it would deny HP's
+                // non-elevated app. If none exists, no HP process is running, so nothing can race the write.
+                if (!Mutex.TryOpenExisting(@"Global\" + name + Sid, out var m)) continue;
                 if (!Wait(m)) { m.Dispose(); return; }
                 held.Add(m);
             }

@@ -1,6 +1,6 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
-import { GPU_MODES, isNative, type GpuMode } from '../lib/bridge'
+import { isNative, type GpuMode } from '../lib/bridge'
 import { setAutostart, setGpuMode } from '../lib/actions'
 import { useStore } from '../lib/store'
 import { Button, EASE_OUT, Segmented, Switch } from '../components/ui'
@@ -33,7 +33,7 @@ export function SettingsPage() {
         {hw.gpuMode && (
           <Row title="Graphics mode" text={GPU_TEXT[hw.gpuMode]} note={changed ? 'Restart to apply' : undefined}>
             <div ref={gpuRow}>
-              <Segmented<GpuMode> label="Graphics mode" options={GPU_MODES} value={hw.gpuMode} onChange={m => { if (m !== hw.gpuMode) setPending(m) }} />
+              <Segmented<GpuMode> label="Graphics mode" options={hw.gpuModes} value={hw.gpuMode} onChange={m => { if (m !== hw.gpuMode) setPending(m) }} />
             </div>
           </Row>
         )}

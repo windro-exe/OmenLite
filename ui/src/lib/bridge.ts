@@ -4,7 +4,6 @@
 export type PerfMode = 'Quiet' | 'Cool' | 'Balanced' | 'Performance'
 export type GpuMode = 'Hybrid' | 'Discrete' | 'Optimus'
 export const PERF_MODES: PerfMode[] = ['Quiet', 'Cool', 'Balanced', 'Performance']
-export const GPU_MODES: GpuMode[] = ['Hybrid', 'Discrete', 'Optimus']
 
 export interface HwState {
   available: boolean
@@ -18,6 +17,8 @@ export interface HwState {
   backlight: boolean
   /** null when the laptop has no graphics switch (MUX). */
   gpuMode: GpuMode | null
+  /** Graphics modes this laptop's BIOS supports (Optimus only on some models). */
+  gpuModes: GpuMode[]
   /** false when the laptop has no 4-zone RGB keyboard. */
   fourZone: boolean
   /** BIOS keyboard type (HP WMI 0x20008/0x2B): 1 with number pad, 2 without; null when the BIOS doesn't say. */
@@ -125,6 +126,7 @@ const mock: HwState = {
   zones: ['#BF1E1E', '#BF1E1E', '#BF1E1E', '#BF1E1E'],
   backlight: true,
   gpuMode: 'Discrete',
+  gpuModes: ['Hybrid', 'Discrete'],
   fourZone: true,
   keyboardType: 2,
   boost: false,
