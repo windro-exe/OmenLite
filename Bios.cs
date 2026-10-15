@@ -167,11 +167,12 @@ public static class Bios
     public static void SetGpuMode(GpuMode mode) => Call(LegacySet, 0x52, [(byte)mode, 0, 0, 0]);
 
     /// Modes this laptop's BIOS offers, read the way OMEN Gaming Hub does: bits of byte 7 in the system design data
-    /// (2 Hybrid, 4 Discrete, 8 Optimus). If the BIOS won't say, Hybrid and Discrete, which every graphics switch has.
+    /// (2 Hybrid, 4 Discrete, 8 Optimus). Like Hub, unreadable or zero means Hybrid and Discrete, which every switch has.
     public static GpuMode[] SupportedGpuModes()
     {
         int bits;
-        try { bits = Call(Gaming, 0x28)[7]; } catch (BiosException) { bits = 6; }
+        try { bits = Call(Gaming, 0x28)[7]; } catch { bits = 0; }
+        if (bits == 0) bits = 6;
         return new[] { (2, GpuMode.Hybrid), (4, GpuMode.Discrete), (8, GpuMode.Optimus) }.Where(m => (bits & m.Item1) != 0).Select(m => m.Item2).ToArray();
     }
 }
