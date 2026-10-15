@@ -46,10 +46,11 @@ public static class Bios
     // ---- Performance mode ----
     public enum PerfMode { Balanced, Performance, Cool, Quiet }
 
-    public static void SetPerfMode(PerfMode mode)
+    /// BIOS code for a mode; OMEN Gaming Hub stores the same number as its saved "Mode".
+    public static byte PerfCode(PerfMode mode)
     {
         bool v1 = ThermalPolicyVersion >= 1;
-        byte code = (mode, v1) switch
+        return (mode, v1) switch
         {
             (PerfMode.Balanced, true) => 0x30,
             (PerfMode.Performance, true) => 0x31,
@@ -61,8 +62,9 @@ public static class Bios
             (PerfMode.Quiet, false) => 0x03,
             _ => 0x30
         };
-        Call(Gaming, 0x1A, [0xFF, code, 0x00, 0x00]);
     }
+
+    public static void SetPerfMode(PerfMode mode) => Call(Gaming, 0x1A, [0xFF, PerfCode(mode), 0x00, 0x00]);
 
     // ---- Fans ----
     public static int FanCount => Call(Gaming, 0x10)[0];

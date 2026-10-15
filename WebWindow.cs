@@ -50,6 +50,7 @@ public sealed class WebWindow : Window
         _perf = Enum.TryParse<Bios.PerfMode>(saved, out var p) ? p : Bios.PerfMode.Balanced;
 
         _tray = BuildTray();
+        _ = Task.Run(() => Try(SyncHubLighting)); // zones are readable from the BIOS; thermal mode is not, so it syncs on the first change
         _telemetry.Tick += async (_, _) => await PushTelemetry();
         _fanRefresh.Tick += (_, _) => { if (_manualRpm is { } r) Try(() => Bios.SetManualFan(r)); }; // BIOS drops manual level after ~2 min
         SourceInitialized += (_, _) =>
@@ -122,7 +123,7 @@ public sealed class WebWindow : Window
         catch { return; } // malformed message from our own page: nothing to reply to
         try
         {
-            var data = cmd.StartsWith("win.") ? WindowCommand(cmd) : await Task.Run(() => Dispatch(cmd, arg));
+            var data = cmd.StartsWith("win.") ? WindowCommand(cmd) : await Task.Run(() => { var r = Dispatch(cmd, arg); MirrorToHub(cmd); return r; });
             Post(new { id, ok = true, data });
         }
         catch (Exception ex)
@@ -223,6 +224,30 @@ public sealed class WebWindow : Window
         }
     }
 
+    /// Mirrors what a command just changed into OMEN Gaming Hub's saved settings, so its screens agree with the hardware.
+    void MirrorToHub(string cmd)
+    {
+        if (cmd is "setPerf" or "setMaxFan" or "setManualFan" or "setBoost") Try(SyncHubPerf);
+        else if (cmd is "setZones" or "setBacklight") Try(SyncHubLighting);
+    }
+
+    void SyncHubPerf()
+    {
+        bool max = Bios.MaxFan;
+        var mode = Booster.GameBoostActive ? Bios.PerfMode.Performance : _perf;
+        // Hub saves Balanced/Performance as 48/49 and thermal control as Max 0, Auto 1. It has no way to store a fixed
+        // fan rpm (its Manual is a slider that also changes the thermal level), so our manual fan shows there as Auto.
+        HubSync.Set("PerformanceControl", ("Mode", Bios.PerfCode(mode)), ("MaxFan", max ? 1 : 0), ("ThermalControl", max ? 0 : 1));
+    }
+
+    void SyncHubLighting()
+    {
+        // Hub stores zone i as 0xRRGGBB; its DefaultMode 0 re-applies the colours with the backlight on, 1 leaves it off.
+        var values = Bios.GetZones().Select((c, i) => ($"Z{i}", c.R << 16 | c.G << 8 | c.B))
+            .Append(("Mode", 0)).Append(("DefaultMode", Bios.Backlight ? 0 : 1)).ToArray();
+        HubSync.Set("FourZoneLighting", values);
+    }
+
     void StopManual()
     {
         _manualRpm = null;
@@ -291,6 +316,7 @@ public sealed class WebWindow : Window
         _telemetry.Stop();
         if (Booster.GameBoostActive) Try(() => Booster.StopGameBoost());
         if (_manualRpm != null) { StopManual(); Try(() => Bios.SetPerfMode(_perf)); } // hand fans back to BIOS
+        MirrorToHub("setPerf"); // boost and manual fan are now off
         _tray.Dispose();
         _web.Dispose();
         Application.Current.Shutdown();
