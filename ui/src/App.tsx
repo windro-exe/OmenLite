@@ -11,6 +11,7 @@ import { Home } from './pages/Home'
 import { Performance } from './pages/Performance'
 import { Lighting } from './pages/Lighting'
 import { Boost } from './pages/Boost'
+import { Insights } from './pages/Insights'
 import { SettingsPage } from './pages/Settings'
 
 // Screens are composed for this stage size and zoomed uniformly to fit the window (min window 1000×680).
@@ -45,6 +46,7 @@ export default function App() {
             {page === 'performance' && <Performance />}
             {page === 'lighting' && <Lighting />}
             {page === 'boost' && <Boost />}
+            {page === 'insights' && <Insights />}
             {page === 'settings' && <SettingsPage />}
           </motion.div>
         </Stage>

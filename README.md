@@ -14,6 +14,8 @@ Closing the window keeps OmenLite in the tray. Right-click the tray icon → **E
 
 The Keyboard page draws your laptop's own keyboard from the type the BIOS reports. Keyboards it doesn't know yet show the four lighting zones as plain blocks.
 
+**Insights** page (read-only): a 6-hour temperature and fan history, game sessions (recorded while Game Boost is on), battery and charger check, NVIDIA GPU details, and a system page with a **Copy report** button, handy when something doesn't match your laptop. A heat alert (Settings, on by default at 95 °C) shows a tray notice when the CPU or GPU stays that hot for 20 seconds. History is kept in memory while OmenLite runs; the last 20 sessions are saved in `%LOCALAPPDATA%\OmenLite`.
+
 ## Build
 
 Needs Node 24, the .NET 8 SDK, and Inno Setup 6 (`winget install JRSoftware.InnoSetup`).

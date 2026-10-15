@@ -15,6 +15,26 @@ public static class HubSync
     static readonly string Sid = WindowsIdentity.GetCurrent().User!.Value;
     static readonly JsonSerializerOptions Compact = new() { Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping };
 
+    /// True when HP's OMEN app has created its saved settings on this PC.
+    public static bool Installed => File.Exists(Path.Combine(Folder, "profiles.json"));
+
+    /// A DWord from Hub's saved settings (default profile), or null if absent or unreadable. Read-only.
+    public static int? Get(string module, string key)
+    {
+        try
+        {
+            using var fs = new FileStream(Path.Combine(Folder, "profiles.json"), FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            var root = JsonNode.Parse(fs)!;
+            var text = root["ALLPROFILES"]!.AsArray().SelectMany(u => u!["profiles"]!.AsArray())
+                .Where(p => p!["profileId"]!.GetValue<string>() == ZeroId)
+                .SelectMany(p => p!["modules"]!.AsArray())
+                .FirstOrDefault(m => m!["module"]!.GetValue<string>() == module)?["moduleValue"]?[0]?["data"]?.AsArray()
+                .Select(d => d!.AsObject()).FirstOrDefault(d => d.ContainsKey(key))?[key]?.GetValue<string>();
+            return text != null && text.StartsWith("DWord+") && int.TryParse(text["DWord+".Length..], out var v) ? v : null;
+        }
+        catch { return null; }
+    }
+
     /// Sets DWord values in one Hub module (e.g. "PerformanceControl", "FourZoneLighting") of the default and active profiles.
     /// Keys Hub hasn't created yet are added; a module Hub never created is skipped.
     public static void Set(string module, params (string Key, int Value)[] values)

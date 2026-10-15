@@ -1,7 +1,7 @@
 import { AnimatePresence, motion } from 'motion/react'
 import { useEffect, useRef, useState, type ReactNode } from 'react'
 import { isNative, type GpuMode } from '../lib/bridge'
-import { setAutostart, setGpuMode } from '../lib/actions'
+import { setAlert, setAutostart, setGpuMode } from '../lib/actions'
 import { useStore } from '../lib/store'
 import { Button, EASE_OUT, Segmented, Switch } from '../components/ui'
 
@@ -10,6 +10,9 @@ const GPU_TEXT: Record<GpuMode, string> = {
   Discrete: 'NVIDIA drives the screen directly. Lowest latency, highest power use.',
   Optimus: 'The NVIDIA driver switches between the two automatically.',
 }
+
+const ALERT_PRESETS = [0, 85, 90, 95]
+const alertLabel = (t: number) => (t === 0 ? 'Off' : `${t}°`)
 
 /** Settings: no subject, one flush list split by hairlines (DESIGN.md §2, §10). */
 export function SettingsPage() {
@@ -24,6 +27,8 @@ export function SettingsPage() {
     requestAnimationFrame(() => gpuRow.current?.querySelector<HTMLElement>('[aria-checked="true"]')?.focus())
   }
   if (!hw) return null
+  // A threshold set elsewhere (e.g. by the host) still shows as its own option.
+  const alertOptions = (ALERT_PRESETS.includes(hw.alertTemp) ? ALERT_PRESETS : [...ALERT_PRESETS, hw.alertTemp]).map(alertLabel)
   return (
     <div className="relative size-full">
       <div className="absolute left-14 top-6">
@@ -39,6 +44,9 @@ export function SettingsPage() {
         )}
         <Row title="Start with Windows" text="Opens quietly in the tray when you sign in.">
           <Switch label="Start with Windows" checked={hw.autostart} busy={busyAuto} onChange={v => void setAutostart(v)} />
+        </Row>
+        <Row title="Heat alert" text="Notify from the tray when the CPU or GPU stays above this temperature.">
+          <Segmented<string> label="Heat alert" options={alertOptions} value={alertLabel(hw.alertTemp)} onChange={l => void setAlert(l === 'Off' ? 0 : parseInt(l))} />
         </Row>
         <Row title="Model" text={hw.model}><span /></Row>
         <Row title="BIOS" text={`Version ${hw.bios}`}>

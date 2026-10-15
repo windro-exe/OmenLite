@@ -26,10 +26,11 @@ public sealed class WebWindow : Window
     readonly DispatcherTimer _telemetry = new() { Interval = TimeSpan.FromSeconds(1) };
     readonly DispatcherTimer _fanRefresh = new() { Interval = TimeSpan.FromSeconds(90) };
     readonly WinForms.NotifyIcon _tray;
+    readonly Recorder _rec;
     readonly (string Model, string Bios) _info = ReadSystemInfo();
     Bios.PerfMode _perf;
     int? _manualRpm;
-    bool _exiting, _polling;
+    bool _exiting, _polling, _hybrid, _perfKnown;
 
     [DllImport("dwmapi.dll")] static extern int DwmSetWindowAttribute(IntPtr hwnd, int attr, ref int value, int size);
     [DllImport("user32.dll")] static extern bool ReleaseCapture();
@@ -48,10 +49,15 @@ public sealed class WebWindow : Window
 
         var saved = Registry.CurrentUser.OpenSubKey(RegPath)?.GetValue("PerfMode") as string;
         _perf = Enum.TryParse<Bios.PerfMode>(saved, out var p) ? p : Bios.PerfMode.Balanced;
+        _perfKnown = saved != null && Enum.TryParse<Bios.PerfMode>(saved, out _);
 
         _tray = BuildTray();
+        _rec = new Recorder(text => _tray.ShowBalloonTip(10000, "OmenLite heat alert", text, WinForms.ToolTipIcon.Warning));
+        _rec.AlertTemp = Registry.CurrentUser.OpenSubKey(RegPath)?.GetValue("AlertTemp") is int a ? a : 95; // sustained 95 °C means throttling; 0 turns it off
+        try { _hybrid = Bios.GetGpuMode() == Bios.GpuMode.Hybrid; } catch { /* no graphics switch */ }
         _ = Task.Run(() => Try(SyncHubLighting)); // zones are readable from the BIOS; thermal mode is not, so it syncs on the first change
         _telemetry.Tick += async (_, _) => await PushTelemetry();
+        _telemetry.Start();
         _fanRefresh.Tick += (_, _) => { if (_manualRpm is { } r) Try(() => Bios.SetManualFan(r)); }; // BIOS drops manual level after ~2 min
         SourceInitialized += (_, _) =>
         {
@@ -71,10 +77,10 @@ public sealed class WebWindow : Window
         if (IsVisible)
         {
             if (core != null) { core.Resume(); core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Normal; }
-            _telemetry.Start();
+            _telemetry.Interval = TimeSpan.FromSeconds(1); // restarts the timer so the first live reading arrives in 1 s
             return;
         }
-        _telemetry.Stop();
+        // keep sampling in the tray (history, sessions, alerts); PushTelemetry slows it to 10 s
         if (core == null) return;
         core.MemoryUsageTargetLevel = CoreWebView2MemoryUsageTargetLevel.Low;
         try { await core.TrySuspendAsync(); } catch (InvalidOperationException) { /* still visible to WebView2 for a frame */ }
@@ -104,7 +110,7 @@ public sealed class WebWindow : Window
         core.NewWindowRequested += (_, e) => e.Handled = true;
         core.WebMessageReceived += OnMessage;
         core.Navigate(Origin + "index.html");
-        _telemetry.Start();
+        // sampler already runs from the constructor
     }
 
     // ---------------- bridge ----------------
@@ -162,6 +168,7 @@ public sealed class WebWindow : Window
                 var m = Enum.Parse<Bios.PerfMode>(arg.GetString()!);
                 Bios.SetPerfMode(m);
                 _perf = m;
+                _perfKnown = true;
                 Registry.CurrentUser.CreateSubKey(RegPath).SetValue("PerfMode", m.ToString());
                 if (_manualRpm is { } r) Bios.SetManualFan(r); // applying a thermal mode resets fans to auto
                 return null;
@@ -203,8 +210,10 @@ public sealed class WebWindow : Window
                 if (arg.GetBoolean())
                 {
                     var r = Booster.StartGameBoost(_perf);
+                    _rec.StartSession(r.Target ?? "Unknown app");
                     return new { on = true, target = r.Target ?? "", trimmed = r.Trimmed };
                 }
+                _rec.EndSession();
                 Booster.StopGameBoost(); // restores the thermal mode saved at boost start
                 return new { on = false, target = "", trimmed = 0 };
             case "cleanCache":
@@ -212,6 +221,18 @@ public sealed class WebWindow : Window
                 var r = Booster.CleanCache();
                 return new { freedMb = Math.Round(r.FreedMb, 1), files = r.Files, trimmed = r.Trimmed };
             }
+            case "setAlert":
+            {
+                int v = arg.GetInt32();
+                if (v != 0 && v is < 80 or > 100) throw new ArgumentException("Alert temperature must be 0 (off) or 80-100");
+                _rec.AlertTemp = v;
+                Registry.CurrentUser.CreateSubKey(RegPath).SetValue("AlertTemp", v);
+                return null;
+            }
+            case "getHistory": return _rec.History();
+            case "getSessions": return _rec.Sessions();
+            case "getPower": return Power.Read();
+            case "getSystem": return SystemReport.Read(_info.Model, _info.Bios, Booster.GameBoostActive ? Bios.PerfMode.Performance : _perfKnown ? _perf : null);
             case "setAutostart":
             {
                 int rc = arg.GetBoolean()
@@ -275,18 +296,27 @@ public sealed class WebWindow : Window
             gpuModes = Bios.SupportedGpuModes(), // never throws: falls back to Hybrid + Discrete
             keyboardType = Read<int?>(() => Bios.KeyboardType), // null when the BIOS call fails
             boost = Booster.GameBoostActive,
+            alertTemp = _rec.AlertTemp,
             autostart = Schtasks($"/Query /TN {TaskName}") == 0,
         };
     }
 
     async Task PushTelemetry()
     {
-        if (_polling || WindowState == WindowState.Minimized || _web.CoreWebView2 == null) return;
+        if (_polling) return;
         _polling = true; // nvidia-smi can take >1 s when the GPU wakes; never overlap reads
         try
         {
-            var s = await Task.Run(Monitor.Read);
-            Post(new { @event = "telemetry", data = new { cpuTemp = s.CpuTemp, gpuTemp = s.GpuTemp, cpuFan = s.CpuFan, gpuFan = s.GpuFan, cpuLoad = s.CpuLoad, gpuPower = s.GpuPowerW } });
+            // One sampler for everything: 1 s while the window is showing, 10 s in the tray (history, sessions and alerts keep running).
+            bool live = IsVisible && WindowState != WindowState.Minimized && _web.CoreWebView2 != null;
+            _telemetry.Interval = TimeSpan.FromSeconds(live ? 1 : 10);
+            // In the tray, a hybrid-mode GPU is left alone: polling it would keep it awake and cost battery.
+            var s = await Task.Run(() => Monitor.Read(live || !_hybrid));
+            _rec.Add(s);
+            if (!live) return;
+            var g = s.Gpu;
+            Post(new { @event = "telemetry", data = new { cpuTemp = s.CpuTemp, gpuTemp = s.GpuTemp, cpuFan = s.CpuFan, gpuFan = s.GpuFan, cpuLoad = s.CpuLoad, gpuPower = s.GpuPowerW,
+                gpuClock = g.Clock, gpuMemClock = g.MemClock, vramUsed = g.VramUsed, vramTotal = g.VramTotal, gpuLoad = g.Load, powerLimit = g.PowerLimit, gpuState = g.State } });
         }
         finally { _polling = false; }
     }
@@ -315,6 +345,7 @@ public sealed class WebWindow : Window
     {
         if (!_exiting) { e.Cancel = true; Hide(); return; }
         _telemetry.Stop();
+        _rec.EndSession();
         if (Booster.GameBoostActive) Try(() => Booster.StopGameBoost());
         if (_manualRpm != null) { StopManual(); Try(() => Bios.SetPerfMode(_perf)); } // hand fans back to BIOS
         MirrorToHub("setPerf"); // boost and manual fan are now off

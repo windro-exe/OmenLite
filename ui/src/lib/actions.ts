@@ -45,3 +45,8 @@ export async function setBoost(on: boolean) {
 export function setAutostart(on: boolean) {
   return write('autostart', { autostart: on }, 'setAutostart', on)
 }
+
+/** 0 = off, otherwise 80..100 °C. */
+export function setAlert(temp: number) {
+  return write('alert', { alertTemp: temp }, 'setAlert', temp)
+}

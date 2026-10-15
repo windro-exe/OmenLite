@@ -174,7 +174,7 @@ public partial class MainWindow : Window
         {
             if (IsVisible)
             {
-                var s = await Task.Run(Monitor.Read, ct);
+                var s = await Task.Run(() => Monitor.Read(), ct);
                 CpuGauge.AnimateTo(s.CpuTemp > 0 ? s.CpuTemp : null);
                 GpuGauge.AnimateTo(s.GpuTemp);
                 CpuSub.Text = $"{s.CpuLoad:F0}% load";

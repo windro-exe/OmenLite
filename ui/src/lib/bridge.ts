@@ -27,6 +27,8 @@ export interface HwState {
   fanMin: number
   fanMax: number
   boost: boolean
+  /** Heat alert threshold in °C; 0 = off. */
+  alertTemp: number
   autostart: boolean
 }
 
@@ -37,6 +39,55 @@ export interface Telemetry {
   gpuFan: number
   cpuLoad: number
   gpuPower: number | null
+  gpuClock: number | null // MHz
+  gpuMemClock: number | null // MHz
+  vramUsed: number | null // MiB
+  vramTotal: number | null // MiB
+  gpuLoad: number | null // %
+  powerLimit: number | null // W, often unreported
+  /** NVIDIA performance state, e.g. "P8". */
+  gpuState: string | null
+}
+
+/** Oldest first, one sample per `stepS` seconds; arrays have equal length. `endMs` is the newest sample's unix time. */
+export interface History { stepS: number; endMs: number; cpu: number[]; gpu: (number | null)[]; fan: number[] }
+
+/** Recorded while Game Boost is on. `secondsHot` = time with CPU or GPU at 85 °C or more. */
+export interface Session {
+  game: string; startMs: number; seconds: number
+  avgCpu: number; peakCpu: number; avgGpu: number | null; peakGpu: number | null
+  secondsHot: number; active: boolean
+}
+
+export interface Power {
+  present: boolean
+  percent: number | null
+  state: 'charging' | 'discharging' | 'full' | 'plugged'
+  acOnline: boolean
+  /** Charge or discharge rate in W. */
+  watts: number | null
+  minutesLeft: number | null
+  /** Full-charge capacity. */
+  capacityWh: number | null
+  designWh: number | null
+  /** 0..100, how much capacity has been lost. */
+  wearPct: number | null
+  /** 'below': the charger is weaker than this laptop needs. */
+  adapterStatus: 'ok' | 'below' | 'battery' | 'notFunctioning' | 'typeC' | 'unknown'
+  adapterWatts: number | null
+}
+
+export interface SystemInfo {
+  model: string; board: string; bios: string; appVersion: string
+  thermalPolicy: number | null
+  fanCount: number | null
+  fanMin: number; fanMax: number
+  keyboardType: number | null
+  fourZone: boolean
+  gpuModes: GpuMode[]
+  gpuMode: GpuMode | null
+  /** HP OMEN Gaming Hub: is it installed, and does its saved state match the hardware (null = unknown)? */
+  hub: { installed: boolean; inSync: boolean | null; differences: string[] }
 }
 
 export interface BoostResult { on: boolean; target: string; trimmed: number }
@@ -54,6 +105,13 @@ export interface Commands {
   setBoost: [boolean, BoostResult]
   cleanCache: [void, CleanResult]
   setAutostart: [boolean, void]
+  /** 0 = off, otherwise 80..100 */
+  setAlert: [number, void]
+  getHistory: [void, History]
+  /** Newest first. */
+  getSessions: [void, Session[]]
+  getPower: [void, Power]
+  getSystem: [void, SystemInfo]
   'win.drag': [void, void]
   'win.minimize': [void, void]
   'win.close': [void, void]
@@ -131,6 +189,7 @@ const mock: HwState = {
   keyboardType: 2,
   boost: false,
   autostart: false,
+  alertTemp: 95,
 }
 
 function wait(ms: number) {
@@ -162,6 +221,42 @@ async function mockCall(cmd: keyof Commands, arg: unknown): Promise<unknown> {
       await wait(1400)
       return { freedMb: 812.4, files: 3271, trimmed: 168 } satisfies CleanResult
     case 'setAutostart': mock.autostart = arg === true; return
+    case 'setAlert': mock.alertTemp = arg as number; return
+    case 'getHistory': {
+      const stepS = 10, n = 2160, endMs = Date.now()
+      const cpu: number[] = [], gpu: number[] = [], fan: number[] = []
+      for (let i = 0; i < n; i++) {
+        // Slow load waves plus jitter; a hot gaming stretch about two hours ago.
+        const wave = Math.sin(i / 90) * 8 + Math.sin(i / 23) * 4
+        const game = i > n - 780 && i < n - 560 ? 30 : 0
+        const c = clamp(52 + wave + game + (Math.random() - 0.5) * 3, 38, 97)
+        cpu.push(Math.round(c))
+        gpu.push(Math.round(clamp(48 + wave * 0.6 + game * 0.8 + (Math.random() - 0.5) * 2, 36, 90)))
+        fan.push(Math.round((1800 + (c - 40) * 70) / 100) * 100)
+      }
+      return { stepS, endMs, cpu, gpu, fan } satisfies History
+    }
+    case 'getSessions': {
+      const now = Date.now(), h = 3600_000
+      const done: Session[] = [
+        { game: 'Cyberpunk2077', startMs: now - 26 * h, seconds: 5400, avgCpu: 78, peakCpu: 91, avgGpu: 74, peakGpu: 83, secondsHot: 640, active: false },
+        { game: 'Elden Ring', startMs: now - 50 * h, seconds: 2520, avgCpu: 71, peakCpu: 84, avgGpu: 69, peakGpu: 79, secondsHot: 0, active: false },
+        { game: 'Hades', startMs: now - 74 * h, seconds: 960, avgCpu: 58, peakCpu: 66, avgGpu: null, peakGpu: null, secondsHot: 0, active: false },
+      ]
+      return mock.boost
+        ? [{ game: 'Cyberpunk2077', startMs: now - 12 * 60_000, seconds: 720, avgCpu: 80, peakCpu: 88, avgGpu: 75, peakGpu: 82, secondsHot: 60, active: true }, ...done]
+        : done
+    }
+    case 'getPower': return {
+      present: true, percent: 64, state: 'charging', acOnline: true, watts: 38, minutesLeft: 52,
+      capacityWh: 68.4, designWh: 83, wearPct: 18, adapterStatus: 'below', adapterWatts: 150,
+    } satisfies Power
+    case 'getSystem': return {
+      model: mock.model, board: '8A44', bios: mock.bios, appVersion: '0.4.0', thermalPolicy: 1, fanCount: 2,
+      fanMin: mock.fanMin, fanMax: mock.fanMax, keyboardType: mock.keyboardType, fourZone: mock.fourZone,
+      gpuModes: mock.gpuModes, gpuMode: mock.gpuMode,
+      hub: { installed: true, inSync: false, differences: ['Keyboard colours'] },
+    } satisfies SystemInfo
     default: return
   }
 }
@@ -180,6 +275,9 @@ function startMockTelemetry() {
       cpuTemp: Math.round(cpu), gpuTemp: Math.round(gpu), cpuLoad: load,
       cpuFan: Math.round(f1 / 100) * 100, gpuFan: Math.round(f2 / 100) * 100,
       gpuPower: Math.round(18 + load * 0.9 + heat),
+      gpuClock: Math.round(600 + load * 14), gpuMemClock: load > 20 ? 7001 : 810,
+      vramUsed: Math.round(900 + load * 52), vramTotal: 8188, gpuLoad: Math.round(load * 0.8),
+      powerLimit: null, gpuState: load > 20 ? 'P0' : 'P8',
     }
     listeners.forEach(l => l(t))
   }, 1000)
