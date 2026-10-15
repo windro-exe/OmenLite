@@ -26,7 +26,8 @@ public static class HubSync
         {
             foreach (var name in new[] { "ProfileJsonWrapperLock_", "ProfilesMutex_" })
             {
-                var m = new Mutex(false, @"Global\" + name + Sid);
+                // Only join HP's lock, never create it: made by us (elevated) it would deny HP's non-elevated app.
+                if (!Mutex.TryOpenExisting(@"Global\" + name + Sid, out var m)) return;
                 if (!Wait(m)) { m.Dispose(); return; }
                 held.Add(m);
             }

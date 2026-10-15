@@ -156,7 +156,7 @@ public static class Bios
     }
     public static bool Backlight
     {
-        get => Call(Lighting, 0x04)[0] == 0xE4;
+        get => (Call(Lighting, 0x04)[0] & 0x80) != 0; // HP tests bit 7 (on = 0xE4, off = 0x64)
         set => Call(Lighting, 0x05, [value ? (byte)0xE4 : (byte)0x64, 0, 0, 0]);
     }
 
