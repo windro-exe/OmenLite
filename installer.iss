@@ -21,6 +21,7 @@ OutputBaseFilename=OmenLite-Setup-{#Version}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=icon.ico
 UninstallDisplayIcon={app}\OmenLite.exe
 CloseApplications=force
 

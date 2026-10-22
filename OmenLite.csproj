@@ -7,6 +7,7 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>icon.ico</ApplicationIcon>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <!-- ui/ is the web source (built into wwwroot/ by `npm run build`); keep node_modules out of the C# glob -->
     <DefaultItemExcludes>$(DefaultItemExcludes);ui\**;wwwroot\**</DefaultItemExcludes>
