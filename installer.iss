@@ -37,7 +37,8 @@ Name: "{group}\Uninstall OmenLite"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\OmenLite"; Filename: "{app}\OmenLite.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\OmenLite.exe"; Description: "Launch OmenLite"; Flags: nowait postinstall skipifsilent
+; shellexec: the app requires administrator rights, and a plain launch as the original user fails with error 740.
+Filename: "{app}\OmenLite.exe"; Description: "Launch OmenLite"; Flags: shellexec nowait postinstall skipifsilent
 
 [UninstallRun]
 ; The app keeps running in the tray, and "start with Windows" is a scheduled task; remove both.
